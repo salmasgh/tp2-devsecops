@@ -1,3 +1,2 @@
 -P ubuntu-latest=catthehacker/ubuntu:act-latest
 --pull=false
---artifact-server-path=.artifacts

@@ -32,3 +32,14 @@ def test_config_yaml_invalide_renvoie_400():
 def test_entetes_de_securite():
     r = client.get("/user", params={"name": "bob"})
     assert r.headers["X-Content-Type-Options"] == "nosniff"
+
+
+def test_dns_sans_cle_refuse():
+    r = client.get("/diagnostic/dns", params={"domain": "localhost"})
+    assert r.status_code == 401
+
+
+def test_dns_injection_rejetee(monkeypatch):
+    monkeypatch.setattr(main, "SECRET_KEY", "k")
+    r = client.get("/diagnostic/dns", params={"domain": "a;cat /etc/passwd"}, headers={"x-api-key": "k"})
+    assert r.status_code == 400

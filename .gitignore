@@ -6,3 +6,4 @@ app.db
 owasp_key.txt
 logs/
 .artifacts/
+reports/

@@ -74,3 +74,56 @@ jobs:
             -v trivy-cache:/root/.cache/trivy --entrypoint sh aquasec/trivy:latest -c \
             'mkdir -p /src && tar -xf - -C /src && trivy fs --no-progress --scanners vuln \
              --severity HIGH,CRITICAL --exit-code 1 /src'
+
+  dast:
+    name: DAST (OWASP ZAP)
+    needs: build-test
+    runs-on: ubuntu-latest
+    env:
+      APP: tp2-app-ephemeral
+      NET: dast-net
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build de l'image à tester
+        run: docker build -t tp2-app:dast .
+
+      - name: Déploiement sur un environnement éphémère
+        run: |
+          docker rm -f $APP zap 2>/dev/null || true
+          docker network create $NET 2>/dev/null || true
+          docker run -d --name $APP --network $NET \
+            -e SECRET_KEY="$(openssl rand -hex 32)" tp2-app:dast
+          for i in $(seq 1 30); do
+            docker exec $APP python -c "import urllib.request as u; u.urlopen('http://localhost:8000/openapi.json')" \
+              2>/dev/null && echo "Application prête après ${i}s" && break
+            sleep 1
+          done
+
+      - name: Scan DAST OWASP ZAP (API scan via OpenAPI)
+        run: |
+          docker volume rm zapwrk 2>/dev/null || true
+          docker volume create zapwrk
+          docker run --name zap --network $NET -u root -v zapwrk:/zap/wrk \
+            ghcr.io/zaproxy/zaproxy:stable zap-api-scan.py \
+            -t http://$APP:8000/openapi.json -f openapi \
+            -J zap-report.json -r zap-report.html -I
+          docker cp zap:/zap/wrk/zap-report.json .
+          docker cp zap:/zap/wrk/zap-report.html .
+
+      - name: "Security gate DAST : échec si alerte de risque HIGH"
+        run: python3 .github/scripts/zap_gate.py zap-report.json
+
+      - name: Publication du rapport ZAP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: zap-report.*
+
+      - name: Destruction de l'environnement éphémère
+        if: always()
+        run: |
+          docker rm -f $APP zap || true
+          docker network rm $NET || true
+          docker volume rm zapwrk || true

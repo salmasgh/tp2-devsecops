@@ -20,6 +20,17 @@ DB_PATH = "app.db"
 app = FastAPI()
 
 
+@app.middleware("http")
+async def security_headers(request, call_next):
+    """En-tetes de securite HTTP ajoutes a toutes les reponses."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute(
@@ -49,12 +60,16 @@ def ping(host: str):
     except ValueError:
         if not HOSTNAME_RE.match(host) or host.startswith("-"):
             raise HTTPException(status_code=400, detail="host invalide")
-    result = subprocess.run(
-        ["ping", "-c", "1", host], 
-        shell=False, 
-        capture_output=True, 
-        text=True
-    )
+    try:
+        result = subprocess.run(
+            ["ping", "-c", "1", "-W", "2", host],
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        raise HTTPException(status_code=503, detail="ping indisponible")
     return {"returncode": result.returncode, "output": result.stdout}
 
 
@@ -76,7 +91,11 @@ def register(name: str, password: str):
 @app.post("/config")
 def load_config(data: str):
     # safe_load : pas d'instanciation d'objets Python arbitraires (B506)
-    config = yaml.safe_load(data)
+    try:
+        config = yaml.safe_load(data)
+    except yaml.YAMLError:
+        # Pas de stacktrace renvoyee au client : erreur 400 generique
+        raise HTTPException(status_code=400, detail="YAML invalide")
     return {"config": config}
 
 
@@ -85,5 +104,8 @@ def fetch(url: str):
     # Verification TLS activee (comportement par defaut, B501)
     if not url.startswith("https://"):
         raise HTTPException(status_code=400, detail="seul https est autorise")
-    r = requests.get(url, timeout=5)
+    try:
+        r = requests.get(url, timeout=5)
+    except requests.RequestException:
+        raise HTTPException(status_code=502, detail="URL injoignable")
     return {"status_code": r.status_code, "body": r.text[:500]}

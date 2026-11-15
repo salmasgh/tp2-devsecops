@@ -22,3 +22,13 @@ def test_ping_localhost():
     r = client.get("/ping", params={"host": "127.0.0.1"})
     assert r.status_code == 200
     assert "returncode" in r.json()
+
+
+def test_config_yaml_invalide_renvoie_400():
+    r = client.post("/config", params={"data": "'"})
+    assert r.status_code == 400
+
+
+def test_entetes_de_securite():
+    r = client.get("/user", params={"name": "bob"})
+    assert r.headers["X-Content-Type-Options"] == "nosniff"

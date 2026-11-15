@@ -1,0 +1,41 @@
+Sujet de TP 2 : Intégration de la Sécurité dans un Pipeline CI/CD
+Durée : 4 heures
+
+Difficulté : 🟡 Moyenne
+
+Objectifs d'apprentissage :
+Automatiser les tests de sécurité dans un processus de développement continu.
+
+Comprendre le rôle d'un pipeline CI/CD comme un garde-fou de sécurité.
+
+Configurer des règles de validation pour bloquer les déploiements non sécurisés.
+
+Matériel nécessaire :
+Votre propre dépôt Git avec une configuration de CI/CD (GitHub Actions, GitLab CI/CD, ou Jenkins).
+
+Déroulement des activités :
+Configuration du pipeline de base (45 min) :
+
+Assurez-vous que votre projet dispose d'un pipeline CI/CD de base qui compile le code et exécute les tests unitaires.
+
+Étudiez le fichier de configuration de votre pipeline (.github/workflows/ci.yml ou .gitlab-ci.yml).
+
+Intégration du SAST et SCA (1h 30 min) :
+
+Votre mission : Intégrez des étapes dans votre pipeline pour automatiser les scans SAST et SCA (en utilisant les outils du TP 1).
+
+Configurez des règles qui empêcheront le pipeline de passer si des vulnérabilités critiques ou de haute sévérité sont détectées par les scanners.
+
+Analyse Dynamique (DAST) (1h 30 min) :
+
+Votre mission : Ajoutez une étape pour déployer votre application sur un environnement éphémère.
+
+Intégrez un scan DAST avec OWASP ZAP ou un autre outil pour analyser l'application en cours d'exécution.
+
+Le pipeline doit échouer si le scan DAST révèle des failles critiques.
+
+Validation et Évaluation (30 min) :
+
+Votre mission : Créez une pull request avec une vulnérabilité intentionnelle (par exemple, une route non sécurisée) pour démontrer que votre pipeline échoue.
+
+Corrigez la vulnérabilité et soumettez une nouvelle pull request pour prouver que votre pipeline passe avec succès

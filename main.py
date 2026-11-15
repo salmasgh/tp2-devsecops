@@ -1,15 +1,19 @@
-"""Application VOLONTAIREMENT VULNERABLE - cible de scan pour un TP de securite.
-NE JAMAIS DEPLOYER."""
+"""API FastAPI du TP DevSecOps (cible du pipeline CI/CD securise)."""
 import hashlib
+import ipaddress
+import os
+import re
+import secrets
 import sqlite3
 import subprocess
 
 import requests
 import yaml
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
-# VULN: secret en dur dans le code source (Bandit B105)
-SECRET_KEY = "super-secret-key-12345"
+# Le secret est lu depuis l'environnement (plus de secret en dur, B105)
+SECRET_KEY = os.environ.get("SECRET_KEY", "")
+HOSTNAME_RE = re.compile(r"^[A-Za-z0-9.-]{1,253}$")
 
 DB_PATH = "app.db"
 
@@ -39,6 +43,12 @@ def get_user(name: str):
 
 @app.get("/ping")
 def ping(host: str):
+    # Validation stricte de l'entree : IP ou nom d'hote uniquement
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        if not HOSTNAME_RE.match(host) or host.startswith("-"):
+            raise HTTPException(status_code=400, detail="host invalide")
     result = subprocess.run(
         ["ping", "-c", "1", host], 
         shell=False, 
@@ -50,8 +60,10 @@ def ping(host: str):
 
 @app.post("/register")
 def register(name: str, password: str):
-    # VULN: mot de passe hache avec MD5, algorithme faible (Bandit B324)
-    hashed = hashlib.md5(password.encode()).hexdigest()
+    # PBKDF2-HMAC-SHA256 avec sel aleatoire (remplace MD5, B324)
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 600_000)
+    hashed = salt.hex() + "$" + digest.hex()
     conn = get_db()
     conn.execute(
         "INSERT INTO users (name, password) VALUES (?, ?)", (name, hashed)
@@ -63,13 +75,15 @@ def register(name: str, password: str):
 
 @app.post("/config")
 def load_config(data: str):
-    # VULN: deserialisation dangereuse avec yaml.Loader (Bandit B506)
-    config = yaml.load(data, Loader=yaml.Loader)
+    # safe_load : pas d'instanciation d'objets Python arbitraires (B506)
+    config = yaml.safe_load(data)
     return {"config": config}
 
 
 @app.get("/fetch")
 def fetch(url: str):
-    # VULN: verification du certificat TLS desactivee (Bandit B501)
-    r = requests.get(url, verify=False, timeout=5)
+    # Verification TLS activee (comportement par defaut, B501)
+    if not url.startswith("https://"):
+        raise HTTPException(status_code=400, detail="seul https est autorise")
+    r = requests.get(url, timeout=5)
     return {"status_code": r.status_code, "body": r.text[:500]}

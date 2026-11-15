@@ -72,5 +72,5 @@ jobs:
         run: |
           tar -cf - requirements.txt | docker run --rm -i \
             -v trivy-cache:/root/.cache/trivy --entrypoint sh aquasec/trivy:latest -c \
-            'mkdir -p /src && tar -xf - -C /src && trivy fs --quiet --scanners vuln \
+            'mkdir -p /src && tar -xf - -C /src && trivy fs --no-progress --scanners vuln \
              --severity HIGH,CRITICAL --exit-code 1 /src'

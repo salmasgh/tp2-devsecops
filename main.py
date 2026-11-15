@@ -4,12 +4,13 @@ import ipaddress
 import os
 import re
 import secrets
+import socket
 import sqlite3
 import subprocess
 
 import requests
 import yaml
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 
 # Le secret est lu depuis l'environnement (plus de secret en dur, B105)
 SECRET_KEY = os.environ.get("SECRET_KEY", "")
@@ -109,3 +110,18 @@ def fetch(url: str):
     except requests.RequestException:
         raise HTTPException(status_code=502, detail="URL injoignable")
     return {"status_code": r.status_code, "body": r.text[:500]}
+
+
+@app.get("/diagnostic/dns")
+def dns_lookup(domain: str, x_api_key: str = Header(default="")):
+    # Route reservee au support : authentification par cle d'API
+    if not SECRET_KEY or not secrets.compare_digest(x_api_key, SECRET_KEY):
+        raise HTTPException(status_code=401, detail="authentification requise")
+    # Validation stricte + resolution via la bibliotheque standard (aucun shell)
+    if not HOSTNAME_RE.match(domain) or domain.startswith("-"):
+        raise HTTPException(status_code=400, detail="domaine invalide")
+    try:
+        addresses = sorted({info[4][0] for info in socket.getaddrinfo(domain, None)})
+    except socket.gaierror:
+        raise HTTPException(status_code=404, detail="domaine introuvable")
+    return {"domain": domain, "addresses": addresses}

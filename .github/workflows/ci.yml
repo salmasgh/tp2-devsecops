@@ -32,3 +32,45 @@ jobs:
 
       - name: Build de l'image Docker
         run: docker build -t tp2-app:ci .
+
+  sast:
+    name: SAST (Bandit)
+    needs: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installation de Bandit
+        run: pip install bandit
+      - name: Rapport Bandit complet (toutes sévérités, informatif)
+        run: bandit -r . -x ./tests -f txt -o bandit-report.txt || true
+      - name: "Security gate SAST : échec si sévérité HIGH"
+        run: bandit -r . -x ./tests --severity-level high --confidence-level medium
+      - name: Publication du rapport
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.txt
+
+  sca:
+    name: SCA (pip-audit + Trivy)
+    needs: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: pip-audit (rapport des CVE connues)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt || true
+      - name: "Security gate SCA : Trivy échoue si CVE HIGH ou CRITICAL"
+        run: |
+          tar -cf - requirements.txt | docker run --rm -i \
+            -v trivy-cache:/root/.cache/trivy --entrypoint sh aquasec/trivy:latest -c \
+            'mkdir -p /src && tar -xf - -C /src && trivy fs --quiet --scanners vuln \
+             --severity HIGH,CRITICAL --exit-code 1 /src'

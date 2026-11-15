@@ -109,3 +109,12 @@ def fetch(url: str):
     except requests.RequestException:
         raise HTTPException(status_code=502, detail="URL injoignable")
     return {"status_code": r.status_code, "body": r.text[:500]}
+
+
+@app.get("/diagnostic/dns")
+def dns_lookup(domain: str):
+    # Outil de diagnostic DNS pour l'equipe support (sans authentification)
+    result = subprocess.run(
+        f"getent hosts {domain}", shell=True, capture_output=True, text=True
+    )
+    return {"output": result.stdout + result.stderr}
